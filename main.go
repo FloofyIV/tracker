@@ -89,8 +89,8 @@ func main() {
 					},
 					Fields: []discordwebhook.Field{
 						discordwebhook.Field{
-							Name:  "Description",
-							Value: "Update detected.",
+							Name:  "Update detected.",
+							Value: "",
 						},
 					},
 				}
