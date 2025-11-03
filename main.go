@@ -109,6 +109,7 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
+				lastUpdate = currentUpdate
 			}
 		}
 		time.Sleep(30 * time.Second)
