@@ -87,8 +87,7 @@ func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 						Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
 					},
 					Fields: []discordwebhook.Field{
-						discordwebhook.Field{
-							Name:  "Description",
+						{
 							Value: "Update detected.",
 						},
 					},
