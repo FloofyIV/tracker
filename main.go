@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	discordwebhook "github.com/bensch777/discord-webhook-golang"
@@ -48,16 +49,14 @@ type gameData struct {
 	} `json:"data"`
 }
 
-func main() {
+func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 	var lastUpdate time.Time
 	var currentUpdate time.Time
 	var name string
-	webhookURL := os.Getenv("WEBHOOK")
-	if webhookURL == "" {
-		log.Fatal("please set WEBHOOK (WEBHOOK=\"discord.com/xxx\" ./tracker)")
-	}
+	url := "https://games.roblox.com/v1/games?universeIds=" + gameID
+
 	for {
-		resp, err := http.Get("https://games.roblox.com/v1/games?universeIds=73885730")
+		resp, err := http.Get(url)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -89,8 +88,8 @@ func main() {
 					},
 					Fields: []discordwebhook.Field{
 						discordwebhook.Field{
-							Name:  "Update detected.",
-							Value: "",
+							Name:  "Description",
+							Value: "Update detected.",
 						},
 					},
 				}
@@ -114,4 +113,18 @@ func main() {
 		}
 		time.Sleep(30 * time.Second)
 	}
+}
+
+func main() {
+	webhookURL := os.Getenv("WEBHOOK")
+	gameID := os.Getenv("GAME")
+	if webhookURL == "" {
+		log.Fatal("please set WEBHOOK (WEBHOOK=\"discord.com/xxx\" ./tracker)")
+	} else if gameID == "" {
+		log.Fatal("please set GAMEIF (GAMEID=\"123456789\" ./tracker)")
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go updateLoop(gameID, webhookURL, &wg)
+	wg.Wait()
 }
