@@ -49,7 +49,20 @@ type gameData struct {
 	} `json:"data"`
 }
 
-func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
+func updateLoopHandler(gameID string, webhookURL string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for {
+		err := UpdateLoop(gameID, webhookURL)
+		if err != nil {
+			log.Printf("Error in updateLoop: %v. Retrying in 30 seconds...", err)
+			time.Sleep(30 * time.Second)
+			continue
+		}
+	}
+}
+
+func UpdateLoop(gameID string, webhookURL string) error {
 	var lastUpdate time.Time
 	var currentUpdate time.Time
 	var name string
@@ -58,22 +71,26 @@ func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 	for {
 		resp, err := http.Get(url)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
+
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
+
 		var game gameData
 		err = json.Unmarshal(body, &game)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
+
 		for _, item := range game.Data {
 			currentUpdate = item.Updated
 			name = item.Name
 		}
+
 		if lastUpdate.IsZero() {
 			lastUpdate = currentUpdate
 		} else {
@@ -99,17 +116,21 @@ func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 					Content:    "",
 					Embeds:     []discordwebhook.Embed{embed},
 				}
+
 				payload, err := json.Marshal(hook)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
+
 				err = discordwebhook.ExecuteWebhook(webhookURL, payload)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
+
 				lastUpdate = currentUpdate
 			}
 		}
+
 		time.Sleep(30 * time.Second)
 	}
 }
@@ -117,13 +138,15 @@ func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 func main() {
 	webhookURL := os.Getenv("WEBHOOK")
 	gameID := os.Getenv("GAME")
+
 	if webhookURL == "" {
 		log.Fatal("please set WEBHOOK (WEBHOOK=\"discord.com/xxx\" ./tracker)")
 	} else if gameID == "" {
-		log.Fatal("please set GAMEIF (GAMEID=\"123456789\" ./tracker)")
+		log.Fatal("please set GAMEID (GAMEID=\"123456789\" ./tracker)")
 	}
+
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go updateLoop(gameID, webhookURL, &wg)
+	go updateLoopHandler(gameID, webhookURL, &wg)
 	wg.Wait()
 }
