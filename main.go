@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/tidwall/gjson"
 
 	discordwebhook "github.com/bensch777/discord-webhook-golang"
 )
@@ -49,6 +52,34 @@ type gameData struct {
 	} `json:"data"`
 }
 
+func getUniverseFromPlaceID(PlaceID string) string {
+	client := &http.Client{}
+	url := "https://apis.roblox.com/universes/v1/places/" + PlaceID + "/universe"
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	universeID := gjson.Get(string(body), "universeId").String()
+
+	if universeID == "" {
+		panic("failed to get universeID, quitting.")
+	}
+	return universeID
+}
+
 func updateLoopHandler(gameID string, webhookURL string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -67,12 +98,15 @@ func UpdateLoop(gameID string, webhookURL string) error {
 	var currentUpdate time.Time
 	var name string
 	url := "https://games.roblox.com/v1/games?universeIds=" + gameID
+	fmt.Println("Started updateLoop")
 
 	for {
+		fmt.Printf("Sending request...\r")
 		resp, err := http.Get(url)
 		if err != nil {
 			return err
 		}
+		fmt.Printf("\033[KRecieved data\r")
 
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -95,6 +129,7 @@ func UpdateLoop(gameID string, webhookURL string) error {
 			lastUpdate = currentUpdate
 		} else {
 			if currentUpdate != lastUpdate {
+				fmt.Println("update detected", time.Now().UTC())
 				embed := discordwebhook.Embed{
 					Title:     name,
 					Color:     16768512,
@@ -137,16 +172,18 @@ func UpdateLoop(gameID string, webhookURL string) error {
 
 func main() {
 	webhookURL := os.Getenv("WEBHOOK")
-	gameID := os.Getenv("GAME")
+	placeID := os.Getenv("PLACE")
+	var wg sync.WaitGroup
 
 	if webhookURL == "" {
-		log.Fatal("please set WEBHOOK (WEBHOOK=\"discord.com/xxx\" ./tracker)")
-	} else if gameID == "" {
-		log.Fatal("please set GAMEID (GAMEID=\"123456789\" ./tracker)")
+		log.Fatal("please set the webhook (WEBHOOK=\"discord.com/xxx\" ./tracker)")
+	} else if placeID == "" {
+		log.Fatal("please set the placeID (PLACE=\"123456789\" ./tracker)")
 	}
-
-	var wg sync.WaitGroup
+	fmt.Printf("\033[KGetting universeID\r")
+	universeID := getUniverseFromPlaceID(placeID)
+	fmt.Printf("\033[KGot universeID\n")
 	wg.Add(1)
-	go updateLoopHandler(gameID, webhookURL, &wg)
+	go updateLoopHandler(universeID, webhookURL, &wg)
 	wg.Wait()
 }
