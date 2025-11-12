@@ -9,8 +9,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"github.com/tidwall/gjson"
 )
 
 type gameData struct {
@@ -53,34 +51,6 @@ type gameData struct {
 var lastUpdate time.Time
 var currentUpdate time.Time
 var name string
-
-func getUniverseFromPlaceID(PlaceID string) string {
-	client := &http.Client{}
-	url := "https://apis.roblox.com/universes/v1/places/" + PlaceID + "/universe"
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		panic(err)
-	}
-	universeID := gjson.Get(string(body), "universeId").String()
-
-	if universeID == "" {
-		panic("failed to get universeID, quitting.")
-	}
-	return universeID
-}
 
 func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 	defer wg.Done()
