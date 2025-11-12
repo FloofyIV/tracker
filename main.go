@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
-
-	discordwebhook "github.com/bensch777/discord-webhook-golang"
 )
 
 type gameData struct {
@@ -52,6 +50,10 @@ type gameData struct {
 	} `json:"data"`
 }
 
+var lastUpdate time.Time
+var currentUpdate time.Time
+var name string
+
 func getUniverseFromPlaceID(PlaceID string) string {
 	client := &http.Client{}
 	url := "https://apis.roblox.com/universes/v1/places/" + PlaceID + "/universe"
@@ -80,98 +82,65 @@ func getUniverseFromPlaceID(PlaceID string) string {
 	return universeID
 }
 
-func updateLoopHandler(gameID string, webhookURL string, wg *sync.WaitGroup) {
+func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 	defer wg.Done()
-
+	fmt.Println("Starting update loop.")
 	for {
-		err := UpdateLoop(gameID, webhookURL)
+		err := update(gameID, webhookURL)
 		if err != nil {
-			log.Printf("Error in updateLoop: %v. Retrying in 30 seconds...", err)
+			fmt.Println("retrying in 30 seconds, ", err)
 			time.Sleep(30 * time.Second)
 			continue
 		}
+		time.Sleep(30 * time.Second)
 	}
 }
 
-func UpdateLoop(gameID string, webhookURL string) error {
-	var lastUpdate time.Time
-	var currentUpdate time.Time
-	var name string
-	url := "https://games.roblox.com/v1/games?universeIds=" + gameID
-	fmt.Println("Started updateLoop")
+func update(gameID string, webhookURL string) error {
+	url := "https://games.roblox.com/v1/games?universeIds=" + gameID // game url
+	fmt.Printf("Sending request...\r")
+	resp, err := http.Get(url) // http.Get() the game url -> resp
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\033[KRecieved data, %d\n", resp.StatusCode)
 
-	for {
-		fmt.Printf("Sending request...\r")
-		resp, err := http.Get(url)
-		if err != nil {
-			fmt.Println("Started updateLoop")
+	body, err := io.ReadAll(resp.Body) // extract the body from the response
+	resp.Body.Close()
+	if err != nil {
+		return err
+	}
 
-			return err
-		}
-		fmt.Printf("\033[KRecieved data, %d\n", resp.StatusCode)
+	var game gameData
+	err = json.Unmarshal(body, &game) // extract the json data from the body -> game
+	if err != nil {
+		return err
+	}
 
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			return err
-		}
+	for _, item := range game.Data { // iterate through every key in the json body, saving them to variables
+		currentUpdate = item.Updated
+		name = item.Name
+	}
 
-		var game gameData
-		err = json.Unmarshal(body, &game)
-		if err != nil {
-			return err
-		}
-
-		for _, item := range game.Data {
-			currentUpdate = item.Updated
-			name = item.Name
-		}
-
-		if lastUpdate.IsZero() {
-			lastUpdate = currentUpdate
-		} else {
-			if currentUpdate != lastUpdate {
-				fmt.Println("update detected", time.Now().UTC())
-				if webhookURL != "" {
-					embed := discordwebhook.Embed{
-						Title:     name,
-						Color:     16768512,
-						Timestamp: time.Now(),
-						Author: discordwebhook.Author{
-							Name:     "Aesthetical",
-							Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-						},
-						Fields: []discordwebhook.Field{
-							{
-								Value: "Update detected.",
-							},
-						},
-					}
-
-					hook := discordwebhook.Hook{
-						Username:   "Aesthetical",
-						Avatar_url: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-						Content:    "",
-						Embeds:     []discordwebhook.Embed{embed},
-					}
-
-					payload, err := json.Marshal(hook)
-					if err != nil {
-						return err
-					}
-
-					err = discordwebhook.ExecuteWebhook(webhookURL, payload)
-					if err != nil {
-						return err
+	if lastUpdate.IsZero() {
+		lastUpdate = currentUpdate // if lastUpdate is empty, make it equal to current update
+	} else {
+		if currentUpdate != lastUpdate { // if the current update time is different to the last update, run this
+			fmt.Println("update detected", time.Now().UTC())
+			if webhookURL != "" {
+				for i := 1; i < 3; i++ {
+					err = webhookSend(name, webhookURL)
+					if err != nil || i >= 3 {
+						break
 					}
 				}
-
-				lastUpdate = currentUpdate
 			}
+			lastUpdate = currentUpdate
 		}
-
-		time.Sleep(30 * time.Second)
 	}
+
+	time.Sleep(30 * time.Second)
+	return err
 }
 
 func main() {
@@ -188,6 +157,6 @@ func main() {
 	universeID := getUniverseFromPlaceID(placeID)
 	fmt.Printf("\033[KGot universeID\n")
 	wg.Add(1)
-	go updateLoopHandler(universeID, webhookURL, &wg)
+	go updateLoop(universeID, webhookURL, &wg)
 	wg.Wait()
 }
