@@ -104,9 +104,11 @@ func UpdateLoop(gameID string, webhookURL string) error {
 		fmt.Printf("Sending request...\r")
 		resp, err := http.Get(url)
 		if err != nil {
+			fmt.Println("Started updateLoop")
+
 			return err
 		}
-		fmt.Printf("\033[KRecieved data\r")
+		fmt.Printf("\033[KRecieved data, %d\n", resp.StatusCode)
 
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -130,36 +132,38 @@ func UpdateLoop(gameID string, webhookURL string) error {
 		} else {
 			if currentUpdate != lastUpdate {
 				fmt.Println("update detected", time.Now().UTC())
-				embed := discordwebhook.Embed{
-					Title:     name,
-					Color:     16768512,
-					Timestamp: time.Now(),
-					Author: discordwebhook.Author{
-						Name:     "Aesthetical",
-						Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-					},
-					Fields: []discordwebhook.Field{
-						{
-							Value: "Update detected.",
+				if webhookURL != "" {
+					embed := discordwebhook.Embed{
+						Title:     name,
+						Color:     16768512,
+						Timestamp: time.Now(),
+						Author: discordwebhook.Author{
+							Name:     "Aesthetical",
+							Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
 						},
-					},
-				}
+						Fields: []discordwebhook.Field{
+							{
+								Value: "Update detected.",
+							},
+						},
+					}
 
-				hook := discordwebhook.Hook{
-					Username:   "Aesthetical",
-					Avatar_url: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-					Content:    "",
-					Embeds:     []discordwebhook.Embed{embed},
-				}
+					hook := discordwebhook.Hook{
+						Username:   "Aesthetical",
+						Avatar_url: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
+						Content:    "",
+						Embeds:     []discordwebhook.Embed{embed},
+					}
 
-				payload, err := json.Marshal(hook)
-				if err != nil {
-					return err
-				}
+					payload, err := json.Marshal(hook)
+					if err != nil {
+						return err
+					}
 
-				err = discordwebhook.ExecuteWebhook(webhookURL, payload)
-				if err != nil {
-					return err
+					err = discordwebhook.ExecuteWebhook(webhookURL, payload)
+					if err != nil {
+						return err
+					}
 				}
 
 				lastUpdate = currentUpdate
@@ -176,7 +180,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	if webhookURL == "" {
-		log.Fatal("please set the webhook (WEBHOOK=\"discord.com/xxx\" ./tracker)")
+		fmt.Println("running with no webhook, set with PLACE=\"https://discord.com/api/webhook/xxx/xxx\"")
 	} else if placeID == "" {
 		log.Fatal("please set the placeID (PLACE=\"123456789\" ./tracker)")
 	}
