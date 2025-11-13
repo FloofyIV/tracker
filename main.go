@@ -88,20 +88,26 @@ func update(gameID string, webhookURL string) error {
 	}
 
 	for _, item := range game.Data { // iterate through every key in the json body, saving them to variables
-		currentUpdate = item.Updated
+		currentUpdate = item.Updated.UTC()
 		name = item.Name
 	}
 
 	if lastUpdate.IsZero() {
 		lastUpdate = currentUpdate // if lastUpdate is empty, make it equal to current update
+		fmt.Println("lastUpdate <- currentUpdate")
 	} else {
-		if currentUpdate != lastUpdate { // if the current update time is different to the last update, run this
+		fmt.Println("current update: " + currentUpdate.Format(time.RFC850))
+		fmt.Println("last update: " + lastUpdate.Format(time.RFC850))
+		fmt.Println("name: " + name)
+		if currentUpdate.After(lastUpdate) { // if the current update time is later than the last update, run this
 			fmt.Println("update detected", time.Now().UTC())
 			if webhookURL != "" {
-				for i := 1; i < 3; i++ {
+				for range 3 {
 					err = webhookSend(name, webhookURL)
-					if err != nil || i >= 3 {
+					if err == nil {
 						break
+					} else {
+						fmt.Println(err)
 					}
 				}
 			}
@@ -109,8 +115,7 @@ func update(gameID string, webhookURL string) error {
 		}
 	}
 
-	time.Sleep(30 * time.Second)
-	return err
+	return nil
 }
 
 func main() {
