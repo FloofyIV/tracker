@@ -102,7 +102,7 @@ func update(gameID string, webhookURL string) error {
 		if currentUpdate.After(lastUpdate) { // if the current update time is later than the last update, run this
 			fmt.Println("update detected", time.Now().UTC())
 			if webhookURL != "" {
-				for range 3 {
+				for i := 0; i < 3; i++ {
 					err = webhookSend(name, webhookURL)
 					if err == nil {
 						break
