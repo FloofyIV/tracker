@@ -52,11 +52,11 @@ var lastUpdate time.Time
 var currentUpdate time.Time
 var name string
 
-func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
+func updateLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	fmt.Println("Starting update loop.")
 	for {
-		err := update(gameID, webhookURL)
+		err := update(gameID, webhookURL, role)
 		if err != nil {
 			fmt.Println("retrying in 30 seconds, ", err)
 			time.Sleep(30 * time.Second)
@@ -66,7 +66,7 @@ func updateLoop(gameID string, webhookURL string, wg *sync.WaitGroup) {
 	}
 }
 
-func update(gameID string, webhookURL string) error {
+func update(gameID string, webhookURL string, role string) error {
 	url := "https://games.roblox.com/v1/games?universeIds=" + gameID // game url
 	fmt.Printf("Sending request...\r")
 	resp, err := http.Get(url) // http.Get() the game url -> resp
@@ -103,7 +103,7 @@ func update(gameID string, webhookURL string) error {
 			fmt.Println("update detected", time.Now().UTC())
 			if webhookURL != "" {
 				for i := 0; i < 3; i++ {
-					err = webhookSend(name, webhookURL)
+					err = webhookSend(name, webhookURL, role)
 					if err == nil {
 						break
 					} else {
@@ -121,6 +121,7 @@ func update(gameID string, webhookURL string) error {
 func main() {
 	webhookURL := os.Getenv("WEBHOOK")
 	placeID := os.Getenv("PLACE")
+	pingRole := os.Getenv("ROLE")
 	var wg sync.WaitGroup
 
 	if webhookURL == "" {
@@ -132,6 +133,6 @@ func main() {
 	universeID := getUniverseFromPlaceID(placeID)
 	fmt.Printf("\033[KGot universeID\n")
 	wg.Add(1)
-	go updateLoop(universeID, webhookURL, &wg)
+	go updateLoop(universeID, webhookURL, pingRole, &wg)
 	wg.Wait()
 }
