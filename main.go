@@ -53,6 +53,7 @@ var currentUpdate time.Time
 var name string
 var lastDescription string
 var currentDescription string
+var wasDescription bool
 
 func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -69,11 +70,29 @@ func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup)
 			name = item.Name
 			currentDescription = item.Description
 		}
+		if lastDescription == "" {
+			lastDescription = currentDescription
+		} else {
+			if currentDescription != lastDescription {
+				wasDescription = true
+				fmt.Println("Description updated", time.Now().Format(time.RFC850))
+				if webhookURL != "" {
+					for i := 0; i < 3; i++ {
+						err = webhookSend(name, webhookURL, currentDescription, role)
+						if err == nil {
+							break
+						} else {
+							fmt.Println(err)
+						}
+					}
+				}
+			}
+		}
 		if lastUpdate.IsZero() {
 			lastUpdate = currentUpdate // if lastUpdate is empty, make it equal to current update
 			fmt.Println("lastUpdate <- currentUpdate")
 		} else {
-			if currentUpdate.After(lastUpdate) { // if the current update time is later than the last update, run this
+			if currentUpdate.After(lastUpdate) && wasDescription == false { // if the current update time is later than the last update, run this
 				fmt.Println("update detected", time.Now().UTC())
 				if webhookURL != "" {
 					for i := 0; i < 3; i++ {
@@ -88,23 +107,7 @@ func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup)
 				lastUpdate = currentUpdate
 			}
 		}
-		if lastDescription == "" {
-			lastDescription = currentDescription
-		} else {
-			if currentDescription != lastDescription {
-				fmt.Println("Description updated", time.Now().Format(time.RFC850))
-				if webhookURL != "" {
-					for i := 0; i < 3; i++ {
-						err = webhookSend(name, webhookURL, currentDescription, role)
-						if err == nil {
-							break
-						} else {
-							fmt.Println(err)
-						}
-					}
-				}
-			}
-		}
+		wasDescription = false
 		time.Sleep(30 * time.Second)
 	}
 }
