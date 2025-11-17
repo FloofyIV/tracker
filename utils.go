@@ -40,7 +40,7 @@ func getUniverseFromPlaceID(PlaceID string) string {
 
 func webhookSend(name string, webhookURL string, description string, role string) error {
 	var embed discordwebhook.Embed
-	if description != "" {
+	if description == "" {
 		embed = discordwebhook.Embed{
 			Title:     name,
 			Color:     16768512,
