@@ -91,14 +91,16 @@ func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup)
 		if lastDescription == "" {
 			lastDescription = currentDescription
 		} else {
-			fmt.Println("Description updated", time.Now().Format(time.RFC850))
-			if webhookURL != "" {
-				for i := 0; i < 3; i++ {
-					err = webhookSend(name, webhookURL, currentDescription, role)
-					if err == nil {
-						break
-					} else {
-						fmt.Println(err)
+			if currentDescription != lastDescription {
+				fmt.Println("Description updated", time.Now().Format(time.RFC850))
+				if webhookURL != "" {
+					for i := 0; i < 3; i++ {
+						err = webhookSend(name, webhookURL, currentDescription, role)
+						if err == nil {
+							break
+						} else {
+							fmt.Println(err)
+						}
 					}
 				}
 			}
@@ -128,7 +130,7 @@ func getUniverseData(gameID string) (gameData, error) {
 		return gameData{}, err
 	}
 
-	return gameData{}, err
+	return game, err
 }
 
 func main() {
