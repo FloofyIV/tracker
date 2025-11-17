@@ -38,20 +38,41 @@ func getUniverseFromPlaceID(PlaceID string) string {
 	return universeID
 }
 
-func webhookSend(name string, webhookURL string, role string) error {
-	embed := discordwebhook.Embed{
-		Title:     name,
-		Color:     16768512,
-		Timestamp: time.Now(),
-		Author: discordwebhook.Author{
-			Name:     "Aesthetical",
-			Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-		},
-		Fields: []discordwebhook.Field{
-			{
-				Value: "Update detected.",
+func webhookSend(name string, webhookURL string, description string, role string) error {
+	var embed discordwebhook.Embed
+	if description != "" {
+		embed = discordwebhook.Embed{
+			Title:     name,
+			Color:     16768512,
+			Timestamp: time.Now(),
+			Author: discordwebhook.Author{
+				Name:     "Aesthetical",
+				Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
 			},
-		},
+
+			Fields: []discordwebhook.Field{
+				{
+					Value: "Update detected.",
+				},
+			},
+		}
+	} else {
+		embed = discordwebhook.Embed{
+			Title:     name,
+			Color:     16768512,
+			Timestamp: time.Now(),
+			Author: discordwebhook.Author{
+				Name:     "Aesthetical",
+				Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
+			},
+
+			Fields: []discordwebhook.Field{
+				{
+					Name:  "Description updated",
+					Value: currentDescription,
+				},
+			},
+		}
 	}
 	var hook discordwebhook.Hook
 	if role == "" {

@@ -51,59 +51,50 @@ type gameData struct {
 var lastUpdate time.Time
 var currentUpdate time.Time
 var name string
+var lastDescription string
+var currentDescription string
 
-func updateLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup) {
+func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	fmt.Println("Starting update loop.")
 	for {
-		err := update(gameID, webhookURL, role)
+		data, err := getUniverseData(gameID)
 		if err != nil {
 			fmt.Println("retrying in 30 seconds, ", err)
 			time.Sleep(30 * time.Second)
 			continue
 		}
-		time.Sleep(30 * time.Second)
-	}
-}
-
-func update(gameID string, webhookURL string, role string) error {
-	url := "https://games.roblox.com/v1/games?universeIds=" + gameID // game url
-	fmt.Printf("Sending request...\r")
-	resp, err := http.Get(url) // http.Get() the game url -> resp
-	if err != nil {
-		return err
-	}
-	fmt.Printf("\033[KRecieved data, %d\n", resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body) // extract the body from the response
-	resp.Body.Close()
-	if err != nil {
-		return err
-	}
-
-	var game gameData
-	err = json.Unmarshal(body, &game) // extract the json data from the body -> game
-	if err != nil {
-		return err
-	}
-
-	for _, item := range game.Data { // iterate through every key in the json body, saving them to variables
-		currentUpdate = item.Updated.UTC()
-		name = item.Name
-	}
-
-	if lastUpdate.IsZero() {
-		lastUpdate = currentUpdate // if lastUpdate is empty, make it equal to current update
-		fmt.Println("lastUpdate <- currentUpdate")
-	} else {
-		fmt.Println("current update: " + currentUpdate.Format(time.RFC850))
-		fmt.Println("last update: " + lastUpdate.Format(time.RFC850))
-		fmt.Println("name: " + name)
-		if currentUpdate.After(lastUpdate) { // if the current update time is later than the last update, run this
-			fmt.Println("update detected", time.Now().UTC())
+		for _, item := range data.Data { // iterate through every key in the json body, saving them to variables
+			currentUpdate = item.Updated.UTC()
+			name = item.Name
+			currentDescription = item.Description
+		}
+		if lastUpdate.IsZero() {
+			lastUpdate = currentUpdate // if lastUpdate is empty, make it equal to current update
+			fmt.Println("lastUpdate <- currentUpdate")
+		} else {
+			if currentUpdate.After(lastUpdate) { // if the current update time is later than the last update, run this
+				fmt.Println("update detected", time.Now().UTC())
+				if webhookURL != "" {
+					for i := 0; i < 3; i++ {
+						err = webhookSend(name, webhookURL, "", role)
+						if err == nil {
+							break
+						} else {
+							fmt.Println(err)
+						}
+					}
+				}
+				lastUpdate = currentUpdate
+			}
+		}
+		if lastDescription == "" {
+			lastDescription = currentDescription
+		} else {
+			fmt.Println("Description updated", time.Now().Format(time.RFC850))
 			if webhookURL != "" {
 				for i := 0; i < 3; i++ {
-					err = webhookSend(name, webhookURL, role)
+					err = webhookSend(name, webhookURL, currentDescription, role)
 					if err == nil {
 						break
 					} else {
@@ -111,11 +102,33 @@ func update(gameID string, webhookURL string, role string) error {
 					}
 				}
 			}
-			lastUpdate = currentUpdate
 		}
+		time.Sleep(30 * time.Second)
+	}
+}
+
+func getUniverseData(gameID string) (gameData, error) {
+	url := "https://games.roblox.com/v1/games?universeIds=" + gameID // game url
+	fmt.Printf("Sending request...\r")
+	resp, err := http.Get(url) // http.Get() the game url -> resp
+	if err != nil {
+		return gameData{}, err
+	}
+	fmt.Printf("\033[KRecieved data, %d\n", resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body) // extract the body from the response
+	resp.Body.Close()
+	if err != nil {
+		return gameData{}, err
 	}
 
-	return nil
+	var game gameData
+	err = json.Unmarshal(body, &game) // extract the json data from the body -> game
+	if err != nil {
+		return gameData{}, err
+	}
+
+	return gameData{}, err
 }
 
 func main() {
@@ -133,6 +146,6 @@ func main() {
 	universeID := getUniverseFromPlaceID(placeID)
 	fmt.Printf("\033[KGot universeID\n")
 	wg.Add(1)
-	go updateLoop(universeID, webhookURL, pingRole, &wg)
+	go mainLoop(universeID, webhookURL, pingRole, &wg)
 	wg.Wait()
 }
