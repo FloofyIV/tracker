@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -53,11 +50,14 @@ var currentUpdate time.Time
 var name string
 var lastDescription string
 var currentDescription string
-var wasDescription bool
+var LogFile *os.File
+
+// var wasDescription bool
 
 func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	fmt.Println("Starting update loop.")
+	LogFile.WriteString("Starting update loop.")
 	for {
 		data, err := getUniverseData(gameID)
 		if err != nil {
@@ -66,7 +66,7 @@ func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup)
 			continue
 		}
 		for _, item := range data.Data { // iterate through every key in the json body, saving them to variables
-			currentUpdate = item.Updated.UTC()
+			currentUpdate = item.Updated
 			name = item.Name
 			currentDescription = item.Description
 		}
@@ -74,8 +74,8 @@ func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup)
 			lastDescription = currentDescription
 		} else {
 			if currentDescription != lastDescription {
-				wasDescription = true
 				fmt.Println("Description updated", time.Now().Format(time.RFC850))
+				fmt.Fprintf(LogFile, "Description updated, %s", time.Now().Format(time.RFC850))
 				if webhookURL != "" {
 					for i := 0; i < 3; i++ {
 						err = webhookSend(name, webhookURL, currentDescription, role)
@@ -86,19 +86,23 @@ func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup)
 						}
 					}
 				}
+				lastDescription = currentDescription
+				lastUpdate = currentUpdate
+				time.Sleep(30 * time.Second)
+				continue
 			}
 		}
 		if lastUpdate.IsZero() {
 			lastUpdate = currentUpdate // if lastUpdate is empty, make it equal to current update
 			fmt.Println("lastUpdate <- currentUpdate")
 		} else {
-			if currentUpdate.After(lastUpdate) && wasDescription == false { // if the current update time is later than the last update, run this
+			if currentUpdate.After(lastUpdate) { // if the current update time is later than the last update, run this
 				fmt.Println("update detected", time.Now().UTC())
 				if webhookURL != "" {
 					for i := 0; i < 3; i++ {
-						err = webhookSend(name, webhookURL, "", role)
+						err = webhookSend(name, webhookURL, "", role) // try to send to the webhook 3 times
 						if err == nil {
-							break
+							break // break out of the 3 time send loop if it succeeds.
 						} else {
 							fmt.Println(err)
 						}
@@ -107,39 +111,21 @@ func mainLoop(gameID string, webhookURL string, role string, wg *sync.WaitGroup)
 				lastUpdate = currentUpdate
 			}
 		}
-		wasDescription = false
 		time.Sleep(30 * time.Second)
 	}
 }
 
-func getUniverseData(gameID string) (gameData, error) {
-	url := "https://games.roblox.com/v1/games?universeIds=" + gameID // game url
-	fmt.Printf("Sending request...\r")
-	resp, err := http.Get(url) // http.Get() the game url -> resp
-	if err != nil {
-		return gameData{}, err
-	}
-	fmt.Printf("\033[KRecieved data, %d\n", resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body) // extract the body from the response
-	resp.Body.Close()
-	if err != nil {
-		return gameData{}, err
-	}
-
-	var game gameData
-	err = json.Unmarshal(body, &game) // extract the json data from the body -> game
-	if err != nil {
-		return gameData{}, err
-	}
-
-	return game, err
-}
-
 func main() {
+	var err error
 	webhookURL := os.Getenv("WEBHOOK")
 	placeID := os.Getenv("PLACE")
 	pingRole := os.Getenv("ROLE")
+	LogFile, err = os.OpenFile("log.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0655)
+	if err != nil {
+		fmt.Println(LogFile, err)
+		panic(err)
+	}
+	fmt.Fprintf(LogFile, "Tracker started, %s", time.Now().Format(time.RFC850))
 	var wg sync.WaitGroup
 
 	if webhookURL == "" {
@@ -149,6 +135,7 @@ func main() {
 	}
 	fmt.Printf("\033[KGetting universeID\r")
 	universeID := getUniverseFromPlaceID(placeID)
+	LogFile.WriteString("Got UniverseID")
 	fmt.Printf("\033[KGot universeID\n")
 	wg.Add(1)
 	go mainLoop(universeID, webhookURL, pingRole, &wg)
