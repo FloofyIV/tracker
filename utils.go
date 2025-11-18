@@ -14,11 +14,13 @@ import (
 func getUniverseFromPlaceID(PlaceID string) string {
 	var universeID string
 	var fails int
+
 	for {
 		if fails >= 5 {
-			fmt.Printf("Too many fails, trying again in 15 minutes. (%d fails)", fails)
+			fmt.Printf("Too many fails, trying again in 15 minutes. (%d fails)\n", fails)
 			time.Sleep(15 * time.Minute)
 		}
+
 		client := &http.Client{}
 		url := "https://apis.roblox.com/universes/v1/places/" + PlaceID + "/universe"
 
@@ -29,12 +31,12 @@ func getUniverseFromPlaceID(PlaceID string) string {
 			time.Sleep(30 * time.Second)
 			continue
 		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0")
+		req.Header.Set("User-Agent", "Mozilla/5.0")
 
 		resp, err := client.Do(req)
 		if err != nil {
 			fails++
-			fmt.Println("Failed to get/send response/request, retrying in 30 seconds.")
+			fmt.Println("Failed to get response, retrying in 30 seconds.")
 			time.Sleep(30 * time.Second)
 			continue
 		}
@@ -43,25 +45,28 @@ func getUniverseFromPlaceID(PlaceID string) string {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			fails++
-			fmt.Println("Failed to read the body, retrying in 30 seconds")
+			fmt.Println("Failed to read body, retrying in 30 seconds.")
 			time.Sleep(30 * time.Second)
 			continue
 		}
-		universeID = gjson.Get(string(body), "universeId").String()
 
+		universeID = gjson.GetBytes(body, "universeId").String()
 		if universeID == "" {
 			fails++
-			fmt.Println("Failed to get universe id, retrying in 30 seconds.")
+			fmt.Println("Failed to get universe ID, retrying in 30 seconds.")
 			time.Sleep(30 * time.Second)
 			continue
 		}
+
 		break
 	}
+
 	return universeID
 }
 
-func webhookSend(name string, webhookURL string, description string, role string) error {
+func webhookSend(name, webhookURL, description, role string) error {
 	var embed discordwebhook.Embed
+
 	if description == "" {
 		embed = discordwebhook.Embed{
 			Title:     name,
@@ -71,11 +76,8 @@ func webhookSend(name string, webhookURL string, description string, role string
 				Name:     "Aesthetical",
 				Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
 			},
-
 			Fields: []discordwebhook.Field{
-				{
-					Value: "Update detected.",
-				},
+				{Value: "Update detected."},
 			},
 		}
 	} else {
@@ -87,21 +89,20 @@ func webhookSend(name string, webhookURL string, description string, role string
 				Name:     "Aesthetical",
 				Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
 			},
-
 			Fields: []discordwebhook.Field{
 				{
 					Name:  "Description updated",
-					Value: currentDescription,
+					Value: description,
 				},
 			},
 		}
 	}
+
 	var hook discordwebhook.Hook
 	if role == "" {
 		hook = discordwebhook.Hook{
 			Username:   "Aesthetical",
 			Avatar_url: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-			Content:    "",
 			Embeds:     []discordwebhook.Embed{embed},
 		}
 	} else {
@@ -118,33 +119,23 @@ func webhookSend(name string, webhookURL string, description string, role string
 		return err
 	}
 
-	err = discordwebhook.ExecuteWebhook(webhookURL, payload)
-	if err != nil {
-		return err
-	}
-	return err
+	return discordwebhook.ExecuteWebhook(webhookURL, payload)
 }
 
 func getUniverseData(gameID string) (gameData, error) {
-	url := "https://games.roblox.com/v1/games?universeIds=" + gameID // game url
-	fmt.Printf("Sending request...\r")
-	resp, err := http.Get(url) // http.Get() the game url -> resp
+	url := "https://games.roblox.com/v1/games?universeIds=" + gameID
+	resp, err := http.Get(url)
 	if err != nil {
 		return gameData{}, err
 	}
-	fmt.Printf("\033[KRecieved data, %d\n", resp.StatusCode)
+	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body) // extract the body from the response
-	resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return gameData{}, err
 	}
 
 	var game gameData
-	err = json.Unmarshal(body, &game) // extract the json data from the body -> game
-	if err != nil {
-		return gameData{}, err
-	}
-
+	err = json.Unmarshal(body, &game)
 	return game, err
 }
