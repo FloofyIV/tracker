@@ -27,7 +27,7 @@ func getUniverseFromPlaceID(PlaceID string) string {
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			fails++
-			fmt.Println("Failed to create new GET request, retrying in 30 seconds.")
+			fmt.Printf("Failed to create new GET request, retrying in 30 seconds.\n")
 			time.Sleep(30 * time.Second)
 			continue
 		}
@@ -36,7 +36,7 @@ func getUniverseFromPlaceID(PlaceID string) string {
 		resp, err := client.Do(req)
 		if err != nil {
 			fails++
-			fmt.Println("Failed to get response, retrying in 30 seconds.")
+			fmt.Printf("Failed to get response, retrying in 30 seconds.\n")
 			time.Sleep(30 * time.Second)
 			continue
 		}
@@ -45,7 +45,7 @@ func getUniverseFromPlaceID(PlaceID string) string {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			fails++
-			fmt.Println("Failed to read body, retrying in 30 seconds.")
+			fmt.Printf("Failed to read body, retrying in 30 seconds.\n")
 			time.Sleep(30 * time.Second)
 			continue
 		}
@@ -53,7 +53,7 @@ func getUniverseFromPlaceID(PlaceID string) string {
 		universeID = gjson.GetBytes(body, "universeId").String()
 		if universeID == "" {
 			fails++
-			fmt.Println("Failed to get universe ID, retrying in 30 seconds.")
+			fmt.Printf("Failed to get universe ID, retrying in 30 seconds.\n")
 			time.Sleep(30 * time.Second)
 			continue
 		}
