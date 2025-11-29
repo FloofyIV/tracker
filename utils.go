@@ -137,5 +137,8 @@ func getUniverseData(gameID string) (gameData, error) {
 
 	var game gameData
 	err = json.Unmarshal(body, &game)
+	if err != nil {
+		return gameData{}, err
+	}
 	return game, err
 }
