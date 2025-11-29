@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -108,22 +109,44 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("Tracker started, %s\n", time.Now().Format(time.RFC850))
 	fmt.Fprintf(LogFile, "Tracker started, %s\n", time.Now().Format(time.RFC850))
 
 	if webhookURL == "" {
-		fmt.Println("Running with no webhook.")
+		fmt.Printf("Running with no webhook.\n")
+		fmt.Fprintf(LogFile, "Running with no webhook.\n")
+	} else if webhookURL[:33] == "https://discord.com/api/webhooks/" && len(webhookURL) == 121 {
+		fmt.Printf("Testing webhook\n")
+		fmt.Fprintf(LogFile, "Testing webhook\n")
+		resp, err := http.Get(webhookURL)
+		if err != nil {
+			panic(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			panic(resp.StatusCode)
+		}
+		fmt.Printf("Webhook Verified\n")
 	}
 	if placeID == "" {
 		log.Fatal("Please set PLACE env var")
 	}
 
-	fmt.Printf("Getting universeID...\n")
+	fmt.Printf("Getting universeID\n")
+	fmt.Fprintf(LogFile, "Getting universeID from placeID: %s\n", placeID)
 	universeID := getUniverseFromPlaceID(placeID)
-	fmt.Printf("Got universeID\n")
-	LogFile.WriteString("Got UniverseID\n")
-
+	fmt.Printf("Got universeID: %s\n", universeID)
+	fmt.Fprintf(LogFile, "Got UniverseID: %s\n", universeID)
+	data, err := getUniverseData(universeID)
+	if err != nil {
+		panic(err)
+	}
+	item := data.Data[0]
+	name := item.Name
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go mainLoop(universeID, webhookURL, pingRole, &wg)
+	fmt.Printf("Tracking %s\n", name)
+	fmt.Fprintf(LogFile, "Tracking %s\n", name)
 	wg.Wait()
 }
