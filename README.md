@@ -1,5 +1,3 @@
-# This probably wont work right now, in the middle of testing.
-
 # Build
 first, clone the repo:
 ```
