@@ -30,7 +30,7 @@ func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 	for {
 		data, err := getUniverseData(gameID)
 		if err != nil {
-			fmt.Println("retrying in 30 seconds,", err)
+			fmt.Println(time.Now().Format(time.RFC850), err)
 			time.Sleep(30 * time.Second)
 			continue
 		}
