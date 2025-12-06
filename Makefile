@@ -24,13 +24,13 @@ build-linux-arm64:
 	GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o bin/tracker-linux-arm64
 
 build-linux-arm:
-	GOOS=linux GOARCH=arm go build -ldflags="-s -w" -o bin/tracker-linux-arm32
+	GOOS=linux GOARCH=arm go build -ldflags="-s -w" -o bin/tracker-linux-arm
 
 build-windows-arm64:
-	GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o bin/tracker-windows-arm
+	GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o bin/tracker-windows-arm64
 
 build-windows-arm:
-	GOOS=windows GOARCH=arm go build -ldflags="-s -w" -o bin/tracker-windows-arm64
+	GOOS=windows GOARCH=arm go build -ldflags="-s -w" -o bin/tracker-windows-arm
 
 clean:
 	rm -rf bin
