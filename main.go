@@ -36,6 +36,7 @@ func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 		}
 
 		item := data.Data[0]
+
 		currentUpdate := item.Updated
 		currentDescription := item.Description
 		name := item.Name
@@ -43,44 +44,20 @@ func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 		if lastUpdate.IsZero() {
 			lastUpdate = currentUpdate
 			lastDescription = currentDescription
+
 			time.Sleep(30 * time.Second)
 			continue
 		}
 
-		if currentDescription == lastDescription && currentUpdate.Equal(lastUpdate) {
-			time.Sleep(30 * time.Second)
-			continue
-		}
+		updateChanged := currentUpdate.After(lastUpdate)
+		descChanged := currentDescription != lastDescription
 
-		if currentUpdate.After(lastUpdate) {
-
-			if currentDescription != lastDescription {
-
-				fmt.Println("Description updated", time.Now().Format(time.RFC850))
-				fmt.Fprintf(LogFile, "Description updated, %s\n", time.Now().Format(time.RFC850))
-
-				if webhookURL != "" {
-					desc := currentDescription
-					for i := 0; i < 3; i++ {
-						err := webhookSend(name, webhookURL, desc, role)
-						if err == nil {
-							break
-						}
-						fmt.Println(err)
-						time.Sleep(2 * time.Second)
-					}
-				}
-
-				lastDescription = currentDescription
-				lastUpdate = currentUpdate
-				time.Sleep(30 * time.Second)
-				continue
-			}
-
+		if updateChanged || descChanged {
 			fmt.Println("Update detected", time.Now().UTC())
+
 			if webhookURL != "" {
 				for i := 0; i < 3; i++ {
-					err := webhookSend(name, webhookURL, "", role)
+					err := webhookSend(name, webhookURL, lastDescription, currentDescription, role)
 					if err == nil {
 						break
 					}
@@ -90,6 +67,8 @@ func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 			}
 
 			lastUpdate = currentUpdate
+			lastDescription = currentDescription
+
 			time.Sleep(30 * time.Second)
 			continue
 		}
