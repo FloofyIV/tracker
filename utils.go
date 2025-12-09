@@ -64,10 +64,10 @@ func getUniverseFromPlaceID(PlaceID string) string {
 	return universeID
 }
 
-func webhookSend(name, webhookURL, description, role string) error {
+func webhookSend(name, webhookURL, lastDescription, currentDescription, role string) error {
 	var embed discordwebhook.Embed
 
-	if description == "" {
+	if currentDescription == lastDescription {
 		embed = discordwebhook.Embed{
 			Title:     name,
 			Color:     16768512,
@@ -92,7 +92,7 @@ func webhookSend(name, webhookURL, description, role string) error {
 			Fields: []discordwebhook.Field{
 				{
 					Name:  "Description updated",
-					Value: description,
+					Value: currentDescription,
 				},
 			},
 		}
