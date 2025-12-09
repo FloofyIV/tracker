@@ -124,21 +124,21 @@ func webhookSend(name, webhookURL, description, role string) error {
 
 func getUniverseData(gameID string) (gameData, error) {
 	url := "https://games.roblox.com/v1/games?universeIds=" + gameID
-	resp, err := http.Get(url)
-	if err != nil {
-		return gameData{}, err
+	resp, err := http.Get(url) // get data from url
+	if err != nil || resp.StatusCode != 200 {
+		return gameData{}, err // return empty data struct, and the error
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() // close the body when no longer in use
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return gameData{}, err
+		return gameData{}, err // return empty data struct, and the error
 	}
 
 	var game gameData
 	err = json.Unmarshal(body, &game)
 	if err != nil {
-		return gameData{}, err
+		return gameData{}, err // return empty data struct, and the error
 	}
-	return game, err
+	return game, err // return the data and an empty error
 }
