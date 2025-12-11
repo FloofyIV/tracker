@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -111,21 +112,30 @@ func main() {
 		log.Fatal("Please set PLACE env var")
 	}
 
-	fmt.Printf("Getting universeID\n")
-	fmt.Fprintf(LogFile, "Getting universeID from placeID: %s\n", placeID)
-	universeID := getUniverseFromPlaceID(placeID)
-	fmt.Printf("Got universeID: %s\n", universeID)
-	fmt.Fprintf(LogFile, "Got UniverseID: %s\n", universeID)
-	data, err := getUniverseData(universeID)
-	if err != nil {
-		panic(err)
-	}
-	item := data.Data[0]
-	name := item.Name
+	places := strings.Split(placeID, ";")
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go mainLoop(universeID, webhookURL, pingRole, &wg)
-	fmt.Printf("Tracking %s\n", name)
-	fmt.Fprintf(LogFile, "Tracking %s\n", name)
+
+	for _, p := range places {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+
+		fmt.Printf("Getting universe for place: %s\n", p)
+		fmt.Fprintf(LogFile, "Getting universeID from placeID: %s\n", p)
+		universeID := getUniverseFromPlaceID(p)
+		fmt.Printf("Got universeID: %s\n", universeID)
+		fmt.Fprintf(LogFile, "Got UniverseID: %s\n", universeID)
+		data, err := getUniverseData(universeID)
+		if err != nil {
+			panic(err)
+		}
+		item := data.Data[0]
+		name := item.Name
+		wg.Add(1)
+		go mainLoop(universeID, webhookURL, pingRole, &wg)
+		fmt.Printf("Tracking %s\n", name)
+		fmt.Fprintf(LogFile, "Tracking %s\n", name)
+	}
 	wg.Wait()
 }
