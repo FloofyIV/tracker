@@ -132,6 +132,7 @@ func main() {
 		}
 		item := data.Data[0]
 		name := item.Name
+		time.Sleep(30 * time.Second)
 		wg.Add(1)
 		go mainLoop(universeID, webhookURL, pingRole, &wg)
 		fmt.Printf("Tracking %s\n", name)
