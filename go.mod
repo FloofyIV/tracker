@@ -3,7 +3,6 @@ module FloofyIV/tracker
 go 1.19
 
 require (
-	github.com/bensch777/discord-webhook-golang v0.0.6
 	github.com/tidwall/gjson v1.18.0
 )
 

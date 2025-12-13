@@ -81,26 +81,25 @@ func getUniverseFromPlaceID(PlaceID string) string {
 
 func webhookSend(name, webhookURL, lastDescription, currentDescription, role string) error {
 	type EmbedField struct {
-		Name  string `json:"name,omitempty"`
+		Name  string `json:"name"`
 		Value string `json:"value"`
 	}
 
 	type Embed struct {
-		Title     string       `json:"title"`
-		Color     int          `json:"color"`
-		Timestamp string       `json:"timestamp"`
-		Author    interface{}  `json:"author"`
-		Fields    []EmbedField `json:"fields"`
+		Title     string       `json:"title,omitempty"`
+		Color     int          `json:"color,omitempty"`
+		Timestamp string       `json:"timestamp,omitempty"`
+		Author    interface{}  `json:"author,omitempty"`
+		Fields    []EmbedField `json:"fields,omitempty"`
 	}
 
 	type Payload struct {
-		Username  string  `json:"username"`
-		AvatarURL string  `json:"avatar_url"`
+		Username  string  `json:"username,omitempty"`
+		AvatarURL string  `json:"avatar_url,omitempty"`
 		Content   string  `json:"content,omitempty"`
-		Embeds    []Embed `json:"embeds"`
+		Embeds    []Embed `json:"embeds,omitempty"`
 	}
 
-	// Build embed
 	embed := Embed{
 		Title:     name,
 		Color:     16768512,
@@ -113,7 +112,10 @@ func webhookSend(name, webhookURL, lastDescription, currentDescription, role str
 	}
 
 	if currentDescription == lastDescription {
-		embed.Fields = append(embed.Fields, EmbedField{Value: "Update detected."})
+		embed.Fields = append(embed.Fields, EmbedField{
+			Name:  "Status",
+			Value: "Update detected.",
+		})
 	} else {
 		embed.Fields = append(embed.Fields, EmbedField{
 			Name:  "Description updated",
@@ -151,11 +153,9 @@ func webhookSend(name, webhookURL, lastDescription, currentDescription, role str
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	// 🔥 CRITICAL DIAGNOSTIC LOGS 🔥
 	log.Printf("Webhook Response Status: %d", resp.StatusCode)
 	log.Printf("Webhook Response Body: %s", string(respBody))
 
-	// Rate limit
 	if resp.StatusCode == 429 {
 		retryAfter := 5 * time.Second
 		if ra := resp.Header.Get("Retry-After"); ra != "" {
@@ -189,7 +189,7 @@ func getUniverseData(gameID string) (gameData, error) {
 			continue
 		}
 
-		// Handle 429 rate limit
+		// handle 429 rate limit
 		if resp.StatusCode == 429 {
 			retryAfter := time.Second * 10
 			if ra := resp.Header.Get("Retry-After"); ra != "" {
