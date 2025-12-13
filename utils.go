@@ -191,6 +191,7 @@ func getUniverseData(gameID string) (gameData, error) {
 
 		// handle 429 rate limit
 		if resp.StatusCode == 429 {
+			log.Printf("rate limit")
 			retryAfter := time.Second * 10
 			if ra := resp.Header.Get("Retry-After"); ra != "" {
 				if dur, err := time.ParseDuration(ra + "s"); err == nil {
