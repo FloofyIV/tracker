@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -23,7 +21,6 @@ var LogFile *os.File
 
 func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 	defer wg.Done()
-	LogFile.WriteString("Starting update loop.\n")
 
 	var lastUpdate time.Time
 	var lastDescription string
@@ -31,13 +28,18 @@ func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 	for {
 		data, err := getUniverseData(gameID)
 		if err != nil {
-			fmt.Println(time.Now().Format(time.RFC850), err)
-			time.Sleep(30 * time.Second)
+			log.Printf("Error getting universe data: %v\n", err)
+			time.Sleep(20 * time.Second)
+			continue
+		}
+
+		if len(data.Data) == 0 {
+			log.Println("Universe API returned empty data, retrying…")
+			time.Sleep(20 * time.Second)
 			continue
 		}
 
 		item := data.Data[0]
-
 		currentUpdate := item.Updated
 		currentDescription := item.Description
 		name := item.Name
@@ -45,8 +47,7 @@ func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 		if lastUpdate.IsZero() {
 			lastUpdate = currentUpdate
 			lastDescription = currentDescription
-
-			time.Sleep(30 * time.Second)
+			time.Sleep(20 * time.Second)
 			continue
 		}
 
@@ -54,62 +55,38 @@ func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
 		descChanged := currentDescription != lastDescription
 
 		if updateChanged || descChanged {
-			fmt.Println("Update detected", time.Now().UTC())
+			log.Printf("Update detected at %s\n", time.Now().UTC())
 
 			if webhookURL != "" {
-				for i := 0; i < 3; i++ {
+				maxRetries := 3
+
+				for attempt := 1; attempt <= maxRetries; attempt++ {
 					err := webhookSend(name, webhookURL, lastDescription, currentDescription, role)
 					if err == nil {
+						log.Println("Webhook delivered")
 						break
 					}
-					fmt.Println(err)
-					time.Sleep(2 * time.Second)
+
+					log.Printf("Webhook failed (attempt %d/%d): %v", attempt, maxRetries, err)
+					time.Sleep(time.Duration(attempt) * 2 * time.Second)
 				}
 			}
 
 			lastUpdate = currentUpdate
 			lastDescription = currentDescription
-
-			time.Sleep(30 * time.Second)
-			continue
 		}
 
-		time.Sleep(30 * time.Second)
+		time.Sleep(20 * time.Second)
 	}
 }
 
 func main() {
-	var err error
-
 	webhookURL := os.Getenv("WEBHOOK")
 	placeID := os.Getenv("PLACE")
 	pingRole := os.Getenv("ROLE")
 
-	LogFile, err = os.OpenFile("log.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0655)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Tracker started, %s\n", time.Now().Format(time.RFC850))
-	fmt.Fprintf(LogFile, "Tracker started, %s\n", time.Now().Format(time.RFC850))
-
-	if webhookURL == "" {
-		fmt.Printf("Running with no webhook.\n")
-		fmt.Fprintf(LogFile, "Running with no webhook.\n")
-	} else if webhookURL[:33] == "https://discord.com/api/webhooks/" && len(webhookURL) == 121 {
-		fmt.Printf("Testing webhook\n")
-		fmt.Fprintf(LogFile, "Testing webhook\n")
-		resp, err := http.Get(webhookURL)
-		if err != nil {
-			panic(err)
-		}
-		resp.Body.Close()
-		if resp.StatusCode != 200 {
-			panic(resp.StatusCode)
-		}
-		fmt.Printf("Webhook Verified\n")
-	}
 	if placeID == "" {
-		log.Fatal("Please set PLACE env var")
+		log.Fatal("Missing PLACE environment variable")
 	}
 
 	places := strings.Split(placeID, ";")
@@ -121,22 +98,19 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("Getting universe for place: %s\n", p)
-		fmt.Fprintf(LogFile, "Getting universeID from placeID: %s\n", p)
+		log.Printf("Resolving universe for place: %s\n", p)
 		universeID := getUniverseFromPlaceID(p)
-		fmt.Printf("Got universeID: %s\n", universeID)
-		fmt.Fprintf(LogFile, "Got UniverseID: %s\n", universeID)
-		data, err := getUniverseData(universeID)
-		if err != nil {
-			panic(err)
+
+		if universeID == "" {
+			log.Fatalf("Could not resolve Universe ID for place %s", p)
 		}
-		item := data.Data[0]
-		name := item.Name
-		time.Sleep(30 * time.Second)
+
+		log.Printf("Tracking universe %s", universeID)
 		wg.Add(1)
 		go mainLoop(universeID, webhookURL, pingRole, &wg)
-		fmt.Printf("Tracking %s\n", name)
-		fmt.Fprintf(LogFile, "Tracking %s\n", name)
+
+		time.Sleep(2 * time.Second)
 	}
+
 	wg.Wait()
 }

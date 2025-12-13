@@ -1,144 +1,236 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
-	discordwebhook "github.com/bensch777/discord-webhook-golang"
 	"github.com/tidwall/gjson"
 )
 
 func getUniverseFromPlaceID(PlaceID string) string {
 	var universeID string
-	var fails int
+	client := &http.Client{}
 
-	for {
-		if fails >= 5 {
-			fmt.Printf("Too many fails, trying again in 15 minutes. (%d fails)\n", fails)
-			time.Sleep(15 * time.Minute)
-		}
+	backoff := time.Second * 2
+	maxRetries := 7
 
-		client := &http.Client{}
+	for attempt := 1; attempt <= maxRetries; attempt++ {
 		url := "https://apis.roblox.com/universes/v1/places/" + PlaceID + "/universe"
 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			fails++
-			fmt.Printf("Failed to create new GET request, retrying in 30 seconds.\n")
-			time.Sleep(30 * time.Second)
+			time.Sleep(backoff)
+			backoff *= 2
 			continue
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0")
 
 		resp, err := client.Do(req)
 		if err != nil {
-			fails++
-			fmt.Printf("Failed to get response, retrying in 30 seconds.\n")
-			time.Sleep(30 * time.Second)
+			time.Sleep(backoff)
+			backoff *= 2
 			continue
 		}
-		defer resp.Body.Close()
+
+		// i hate rate limittt
+		if resp.StatusCode == 429 {
+			retryAfter := time.Second * 10
+			if v := resp.Header.Get("Retry-After"); v != "" {
+				if dur, err := time.ParseDuration(v + "s"); err == nil {
+					retryAfter = dur
+				}
+			}
+			resp.Body.Close()
+			time.Sleep(retryAfter)
+			continue
+		}
+
+		// retry on 5xx
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			time.Sleep(backoff)
+			backoff *= 2
+			continue
+		}
 
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
-			fails++
-			fmt.Printf("Failed to read body, retrying in 30 seconds.\n")
-			time.Sleep(30 * time.Second)
+			time.Sleep(backoff)
+			backoff *= 2
 			continue
 		}
 
 		universeID = gjson.GetBytes(body, "universeId").String()
-		if universeID == "" {
-			fails++
-			fmt.Printf("Failed to get universe ID, retrying in 30 seconds.\n")
-			time.Sleep(30 * time.Second)
-			continue
+		if universeID != "" {
+			return universeID
 		}
 
-		break
+		time.Sleep(backoff)
+		backoff *= 2
 	}
 
-	return universeID
+	fmt.Println("Failed to get universeID")
+	return ""
 }
 
 func webhookSend(name, webhookURL, lastDescription, currentDescription, role string) error {
-	var embed discordwebhook.Embed
+	type EmbedField struct {
+		Name  string `json:"name,omitempty"`
+		Value string `json:"value"`
+	}
+
+	type Embed struct {
+		Title     string       `json:"title"`
+		Color     int          `json:"color"`
+		Timestamp string       `json:"timestamp"`
+		Author    interface{}  `json:"author"`
+		Fields    []EmbedField `json:"fields"`
+	}
+
+	type Payload struct {
+		Username  string  `json:"username"`
+		AvatarURL string  `json:"avatar_url"`
+		Content   string  `json:"content,omitempty"`
+		Embeds    []Embed `json:"embeds"`
+	}
+
+	// Build embed
+	embed := Embed{
+		Title:     name,
+		Color:     16768512,
+		Timestamp: time.Now().Format(time.RFC3339),
+		Author: map[string]string{
+			"name":     "Aesthetical",
+			"icon_url": "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
+		},
+		Fields: []EmbedField{},
+	}
 
 	if currentDescription == lastDescription {
-		embed = discordwebhook.Embed{
-			Title:     name,
-			Color:     16768512,
-			Timestamp: time.Now(),
-			Author: discordwebhook.Author{
-				Name:     "Aesthetical",
-				Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-			},
-			Fields: []discordwebhook.Field{
-				{Value: "Update detected."},
-			},
-		}
+		embed.Fields = append(embed.Fields, EmbedField{Value: "Update detected."})
 	} else {
-		embed = discordwebhook.Embed{
-			Title:     name,
-			Color:     16768512,
-			Timestamp: time.Now(),
-			Author: discordwebhook.Author{
-				Name:     "Aesthetical",
-				Icon_URL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-			},
-			Fields: []discordwebhook.Field{
-				{
-					Name:  "Description updated",
-					Value: currentDescription,
-				},
-			},
-		}
+		embed.Fields = append(embed.Fields, EmbedField{
+			Name:  "Description updated",
+			Value: currentDescription,
+		})
 	}
 
-	var hook discordwebhook.Hook
-	if role == "" {
-		hook = discordwebhook.Hook{
-			Username:   "Aesthetical",
-			Avatar_url: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-			Embeds:     []discordwebhook.Embed{embed},
-		}
-	} else {
-		hook = discordwebhook.Hook{
-			Username:   "Aesthetical",
-			Avatar_url: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
-			Content:    "<@&" + role + ">",
-			Embeds:     []discordwebhook.Embed{embed},
-		}
+	payload := Payload{
+		Username:  "Aesthetical",
+		AvatarURL: "https://cdn.discordapp.com/avatars/1419099472650043555/c11c5e3a7e55d7adc756f47a956eb6fb.webp?size=1024",
+		Embeds:    []Embed{embed},
 	}
 
-	payload, err := json.Marshal(hook)
+	if role != "" {
+		payload.Content = "<@&" + role + ">"
+	}
+
+	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("json marshal error: %w", err)
 	}
 
-	return discordwebhook.ExecuteWebhook(webhookURL, payload)
+	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("request build error: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request send error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	// 🔥 CRITICAL DIAGNOSTIC LOGS 🔥
+	log.Printf("Webhook Response Status: %d", resp.StatusCode)
+	log.Printf("Webhook Response Body: %s", string(respBody))
+
+	// Rate limit
+	if resp.StatusCode == 429 {
+		retryAfter := 5 * time.Second
+		if ra := resp.Header.Get("Retry-After"); ra != "" {
+			if dur, err := time.ParseDuration(ra + "s"); err == nil {
+				retryAfter = dur
+			}
+		}
+		log.Printf("Rate limited by Discord. Retrying after %v", retryAfter)
+		time.Sleep(retryAfter)
+		return fmt.Errorf("rate limited")
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("discord returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	log.Println("Webhook sent successfully.")
+	return nil
 }
 
 func getUniverseData(gameID string) (gameData, error) {
 	url := "https://games.roblox.com/v1/games?universeIds=" + gameID
-	resp, err := http.Get(url) // get data from url
-	if err != nil || resp.StatusCode != 200 {
-		return gameData{}, err // return empty data struct, and the error
-	}
-	defer resp.Body.Close() // close the body when no longer in use
+	maxRetries := 6
+	backoff := time.Second * 2
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return gameData{}, err // return empty data struct, and the error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		resp, err := http.Get(url)
+		if err != nil {
+			time.Sleep(backoff)
+			backoff *= 2
+			continue
+		}
+
+		// Handle 429 rate limit
+		if resp.StatusCode == 429 {
+			retryAfter := time.Second * 10
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if dur, err := time.ParseDuration(ra + "s"); err == nil {
+					retryAfter = dur
+				}
+			}
+			resp.Body.Close()
+			time.Sleep(retryAfter)
+			continue
+		}
+
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			time.Sleep(backoff)
+			backoff *= 2
+			continue
+		}
+
+		if resp.StatusCode != 200 {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			return gameData{}, fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			time.Sleep(backoff)
+			backoff *= 2
+			continue
+		}
+
+		var game gameData
+		err = json.Unmarshal(body, &game)
+		if err != nil {
+			return gameData{}, err
+		}
+
+		return game, nil
 	}
 
-	var game gameData
-	err = json.Unmarshal(body, &game)
-	if err != nil {
-		return gameData{}, err // return empty data struct, and the error
-	}
-	return game, err // return the data and an empty error
+	return gameData{}, fmt.Errorf("getUniverseData failed, max retries")
 }
