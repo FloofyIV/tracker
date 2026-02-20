@@ -23,6 +23,6 @@ set the placeid: ```export PLACE="155615604"```<br />
 ### or: (recommended)<br />
 ```
 $ export PLACE="155615604"
-$ explort WEBHOOK="https://discord.com/api/webhooks/xxx/xxx"
+$ export WEBHOOK="https://discord.com/api/webhooks/xxx/xxx"
 $ ./tracker
 ```
