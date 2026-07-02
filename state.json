@@ -1,0 +1,21 @@
+{
+  "games": {},
+  "users": {
+    "53537032": {
+      "userId": 53537032,
+      "username": "User 53537032",
+      "presence": 0,
+      "placeId": 0,
+      "gameName": "",
+      "seen": true
+    },
+    "7231389176": {
+      "userId": 7231389176,
+      "username": "floofylv",
+      "presence": 0,
+      "placeId": 0,
+      "gameName": "",
+      "seen": true
+    }
+  }
+}

@@ -1,116 +1,60 @@
 package main
 
 import (
+	"context"
 	"log"
-	"os"
-	"strings"
+	"os/signal"
 	"sync"
-	"time"
+	"syscall"
 )
 
-type gameData struct {
-	Data []struct {
-		ID          int       `json:"id"`
-		Name        string    `json:"name"`
-		Description string    `json:"description"`
-		Updated     time.Time `json:"updated"`
-	} `json:"data"`
-}
-
-var LogFile *os.File
-
-func mainLoop(gameID, webhookURL, role string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	var lastUpdate time.Time
-	var lastDescription string
-
-	for {
-		data, err := getUniverseData(gameID)
-		if err != nil {
-			log.Printf("Error getting universe data: %v\n", err)
-			time.Sleep(20 * time.Second)
-			continue
-		}
-
-		if len(data.Data) == 0 {
-			log.Println("Universe API returned empty data, retrying…")
-			time.Sleep(20 * time.Second)
-			continue
-		}
-
-		item := data.Data[0]
-		currentUpdate := item.Updated
-		currentDescription := item.Description
-		name := item.Name
-
-		if lastUpdate.IsZero() {
-			lastUpdate = currentUpdate
-			lastDescription = currentDescription
-			time.Sleep(20 * time.Second)
-			continue
-		}
-
-		updateChanged := currentUpdate.After(lastUpdate)
-		descChanged := currentDescription != lastDescription
-
-		if updateChanged || descChanged {
-			log.Printf("Update detected at %s\n", time.Now().UTC())
-
-			if webhookURL != "" {
-				maxRetries := 3
-
-				for attempt := 1; attempt <= maxRetries; attempt++ {
-					err := webhookSend(name, webhookURL, lastDescription, currentDescription, role)
-					if err == nil {
-						log.Println("Webhook delivered")
-						break
-					}
-
-					log.Printf("Webhook failed (attempt %d/%d): %v", attempt, maxRetries, err)
-					time.Sleep(time.Duration(attempt) * 2 * time.Second)
-				}
-			}
-
-			lastUpdate = currentUpdate
-			lastDescription = currentDescription
-		}
-
-		time.Sleep(20 * time.Second)
-	}
-}
-
 func main() {
-	webhookURL := os.Getenv("WEBHOOK")
-	placeID := os.Getenv("PLACE")
-	pingRole := os.Getenv("ROLE")
+	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 
-	if placeID == "" {
-		log.Fatal("Missing PLACE environment variable")
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatalf("config error: %v", err)
 	}
 
-	places := strings.Split(placeID, ";")
+	state, err := loadState(cfg.StateFile)
+	if err != nil {
+		log.Fatalf("failed to load state file %s: %v", cfg.StateFile, err)
+	}
+
+	roblox := newRobloxClient(cfg.HTTPTimout)
+	discord := newDiscord(cfg.HTTPTimout)
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	var wg sync.WaitGroup
 
-	for _, p := range places {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-
-		log.Printf("Resolving universe for place: %s\n", p)
-		universeID := getUniverseFromPlaceID(p)
-
-		if universeID == "" {
-			log.Fatalf("Could not resolve Universe ID for place %s", p)
-		}
-
-		log.Printf("Tracking universe %s", universeID)
+	if len(cfg.Places) > 0 {
+		gt := newGameTracker(cfg, roblox, discord, state)
 		wg.Add(1)
-		go mainLoop(universeID, webhookURL, pingRole, &wg)
-
-		time.Sleep(2 * time.Second)
+		go func() {
+			defer wg.Done()
+			gt.Run(ctx)
+		}()
 	}
 
+	if len(cfg.Users) > 0 {
+		pt := newPlayerTracker(cfg, roblox, discord, state)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pt.Run(ctx)
+		}()
+	}
+
+	log.Printf("tracker running, state file is %s", cfg.StateFile)
+
+	<-ctx.Done()
+	log.Println("shutdown signal received, stopping.")
 	wg.Wait()
+
+	if err := state.save(); err != nil {
+		log.Printf("failed to persist final state: %v", err)
+	}
+	log.Println("stopped cleanly")
 }
