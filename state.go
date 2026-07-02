@@ -24,8 +24,6 @@ type UserState struct {
 	PlaceID  int64        `json:"placeId"`
 	GameName string       `json:"gameName"`
 
-	Following map[int64]string `json:"following,omitempty"`
-
 	Seen bool `json:"seen"`
 }
 
