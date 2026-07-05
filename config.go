@@ -19,6 +19,10 @@ type Config struct {
 	PlayerRole     string
 	PlayerInterval time.Duration
 
+	GamePingCooldown time.Duration
+
+	Verbose bool
+
 	StateFile  string
 	HTTPTimout time.Duration
 }
@@ -44,6 +48,18 @@ func envDuration(def time.Duration, name string) time.Duration {
 		return d
 	}
 	return def
+}
+
+func envBool(def bool, name string) bool {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return def
+	}
+	return b
 }
 
 func splitList(raw string) []string {
@@ -74,6 +90,10 @@ func loadConfig() (*Config, error) {
 		PlayerInterval: envDuration(30*time.Second, "PLAYER_POLL_INTERVAL"),
 		StateFile:      env("state.json", "STATE_FILE"),
 		HTTPTimout:     envDuration(15*time.Second, "HTTP_TIMEOUT"),
+
+		GamePingCooldown: envDuration(15*time.Minute, "PING_COOLDOWN"),
+
+		Verbose: envBool(false, "VERBOSE"),
 	}
 
 	if cfg.PlayerWebhook == "" {
@@ -97,6 +117,12 @@ func loadConfig() (*Config, error) {
 	}
 	if cfg.PlayerInterval < 5*time.Second {
 		cfg.PlayerInterval = 5 * time.Second
+	}
+	if cfg.GamePingCooldown < 1*time.Minute {
+		cfg.GamePingCooldown = 1 * time.Minute
+	}
+	if cfg.GamePingCooldown > 60*time.Minute {
+		cfg.GamePingCooldown = 60 * time.Minute
 	}
 
 	return cfg, nil

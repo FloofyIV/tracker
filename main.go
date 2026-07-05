@@ -21,7 +21,7 @@ func main() {
 		log.Fatalf("failed to load state file %s: %v", cfg.StateFile, err)
 	}
 
-	roblox := newRobloxClient(cfg.HTTPTimout)
+	roblox := newRobloxClient(cfg.HTTPTimout, cfg.Verbose)
 	discord := newDiscord(cfg.HTTPTimout)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

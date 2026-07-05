@@ -107,24 +107,76 @@ func numFmt(n int64) string {
 	return string(out)
 }
 
-func gameEmbed(game GameInfo, placeID, iconURL, status, detail string) embed {
+// maxDiffFieldChars leaves room for both an "Old" and "New" block plus
+// labels/formatting within Discord's 1024-char embed field value limit.
+const maxDiffFieldChars = 460
+
+func gameEmbed(game GameInfo, placeID, iconURL string, c *gameChange) embed {
+	color := colorGameUpdate
+	if !c.Significant {
+		color = colorPlayerLeave // muted grey for non-visible/metadata-only refreshes
+	}
+
 	e := embed{
 		Title:     game.Name,
 		URL:       "https://www.roblox.com/games/" + placeID,
-		Color:     colorGameUpdate,
+		Color:     color,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Author:    &embedAuthor{Name: botName, IconURL: botAvatarURL},
 		Fields: []embedField{
-			{Name: "Status", Value: status},
+			{Name: "Status", Value: c.Status},
 			{Name: "Players Online", Value: numFmt(game.Playing), Inline: true},
 			{Name: "Total Visits", Value: numFmt(game.Visits), Inline: true},
 			{Name: "Favorites", Value: numFmt(game.FavoritedCount), Inline: true},
 		},
-		Footer: &embedFooter{Text: fmt.Sprintf("Universe ID: %d  •  Place ID: %s", game.ID, placeID)},
 	}
-	if detail != "" {
-		e.Fields = append(e.Fields, embedField{Name: "Description Updated", Value: truncate(detail, 1024)})
+
+	if c.NameChanged {
+		e.Fields = append(e.Fields, embedField{
+			Name:  "📝 Name Changed",
+			Value: fmt.Sprintf("**Old:** %s\n**New:** %s", truncate(c.OldName, maxDiffFieldChars), truncate(c.NewName, maxDiffFieldChars)),
+		})
 	}
+
+	if c.DescChanged {
+		oldDesc := c.OldDesc
+		if oldDesc == "" {
+			oldDesc = "*(empty)*"
+		}
+		newDesc := c.NewDesc
+		if newDesc == "" {
+			newDesc = "*(empty)*"
+		}
+		e.Fields = append(e.Fields, embedField{
+			Name:  "📄 Description Changed — Before",
+			Value: truncate(oldDesc, maxDiffFieldChars),
+		})
+		e.Fields = append(e.Fields, embedField{
+			Name:  "📄 Description Changed — After",
+			Value: truncate(newDesc, maxDiffFieldChars),
+		})
+	}
+
+	if c.UpdatedChanged {
+		oldTS := "unknown"
+		if !c.OldUpdated.IsZero() {
+			oldTS = fmt.Sprintf("<t:%d:R>", c.OldUpdated.Unix())
+		}
+		newTS := fmt.Sprintf("<t:%d:R>", c.NewUpdated.Unix())
+		e.Fields = append(e.Fields, embedField{
+			Name:  "🕒 Last Updated Timestamp",
+			Value: fmt.Sprintf("**Old:** %s\n**New:** %s", oldTS, newTS),
+		})
+	}
+
+	if !c.Significant {
+		e.Fields = append(e.Fields, embedField{
+			Name:  "ℹ️ Note",
+			Value: "Roblox reported an updated timestamp, but the name and description are unchanged. This is usually a backend metadata refresh, not a real edit.",
+		})
+	}
+
+	e.Footer = &embedFooter{Text: fmt.Sprintf("Universe ID: %d  •  Place ID: %s", game.ID, placeID)}
 	if iconURL != "" {
 		e.Thumbnail = &embedThumbnail{URL: iconURL}
 	}

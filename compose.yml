@@ -8,14 +8,13 @@ services:
       WEBHOOK: ${WEBHOOK:-}
       ROLE: ${ROLE:-}
       POLL_INTERVAL: ${POLL_INTERVAL:-20}
+      PING_COOLDOWN: ${PING_COOLDOWN:-15m}
       USERS: ${USERS:-}
       PLAYER_WEBHOOK: ${PLAYER_WEBHOOK:-}
       PLAYER_ROLE: ${PLAYER_ROLE:-}
       PLAYER_POLL_INTERVAL: ${PLAYER_POLL_INTERVAL:-30}
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:-15}
+      VERBOSE: ${VERBOSE:-false}
       STATE_FILE: /data/state.json
     volumes:
-      - tracker-data:/data
-
-volumes:
-  tracker-data:
+      - ./tracker-data:/data

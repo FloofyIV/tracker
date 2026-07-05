@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,11 +13,12 @@ import (
 )
 
 type RobloxClient struct {
-	http *http.Client
+	http    *http.Client
+	verbose bool
 }
 
-func newRobloxClient(timeout time.Duration) *RobloxClient {
-	return &RobloxClient{http: &http.Client{Timeout: timeout}}
+func newRobloxClient(timeout time.Duration, verbose bool) *RobloxClient {
+	return &RobloxClient{http: &http.Client{Timeout: timeout}, verbose: verbose}
 }
 
 func (c *RobloxClient) ResolveUniverseID(ctx context.Context, placeID string) (string, error) {
@@ -60,9 +62,15 @@ func (c *RobloxClient) GetGamesInfo(ctx context.Context, universeIDs []string) (
 		return map[string]GameInfo{}, nil
 	}
 	target := "https://games.roblox.com/v1/games?universeIds=" + strings.Join(universeIDs, ",")
+	if c.verbose {
+		log.Printf("[roblox][verbose] GET %s", target)
+	}
 	res, err := fetchWithRetry(ctx, c.http, newGetRequest(target), 6)
 	if err != nil {
 		return nil, err
+	}
+	if c.verbose {
+		log.Printf("[roblox][verbose] games API response status=%d body=%s", res.Status, string(res.Body))
 	}
 	if res.Status != http.StatusOK {
 		return nil, fmt.Errorf("games API returned status %d", res.Status)
